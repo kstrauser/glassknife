@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "glassknife"
+version = "0.0.1"
+description = "Obsidian vault management tools"
+license = "Apache 2.0"
+authors = ["Kirk Strauser <kirk@strauser.com>"]
+readme = "README.rst"
+homepage = "https://github.com/kstrauser/glassknife"
+repository = "https://github.com/kstrauser/glassknife.git"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: News/Diary",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Utilities"
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pydantic = "^1.8.2"
+PyYAML = "^5.4.1"
+xdg = "^5.1.1"
+
+[tool.poetry.dev-dependencies]
+black = "^21.8b0"
+flake8 = "^3.9.2"
+isort = "^5.9.3"
+mypy = "^0.910"
+pylint = "^2.10.2"
+pytest = "^4.6"
+
+[tool.poetry.scripts]
+make-indexes = "glassknife.make_indexes:handle_command_line"
+process-notes = "glassknife.process_notes:handle_command_line"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

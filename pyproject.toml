@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "glassknife"
-version = "0.0.1"
+version = "0.1.0"
 description = "Obsidian vault management tools"
 license = "Apache 2.0"
 authors = ["Kirk Strauser <kirk@strauser.com>"]

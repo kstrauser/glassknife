@@ -6,18 +6,16 @@ import argparse
 import datetime as dt
 import logging
 import re
+import subprocess
 import webbrowser
-from typing import List, Tuple
+from typing import Callable, Dict, List, Tuple
 from urllib.parse import quote
 
 from glassknife.common import daily_note_files, logging_verbosity
-from glassknife.config import Vault, load_config
+from glassknife.config import Vault, load_config, ProcessNotes
 
 LOG = logging.getLogger(__name__)
 UNPROCESSED = "#unprocessed"
-
-TO_DO = "- [ ]"
-JOURNAL = "*"
 
 LINK_PATTERN = re.compile(
     r"""
@@ -28,6 +26,47 @@ LINK_PATTERN = re.compile(
 """,
     re.VERBOSE,
 )
+
+ActionFunc = Callable[[str, bool], None]
+ACTIONS: Dict[str, ActionFunc] = {}
+
+
+def register(name):
+    """Register a mapping of an action name to a function that implements it."""
+
+    def outer(func):
+        ACTIONS[name] = func
+        return func
+
+    return outer
+
+
+@register("Day One")
+def send_to_dayone(text: str, dry_run: bool):
+    """Create a Day One journal entry from the text."""
+
+    LOG.info("Sending to Day One: %r", text)
+    if not dry_run:
+        webbrowser.open(f"dayone2://post?entry={quote(text)}")
+
+
+@register("OmniFocus")
+def send_to_omnifocus(text: str, dry_run: bool):
+    """Create an OmniFocus action from the text."""
+
+    LOG.info("Sending to OmniFocus: %r", text)
+    if not dry_run:
+        webbrowser.open(f"omnifocus://x-callback-url/add?name={quote(text)}&autosave=true")
+
+
+@register("Reminders")
+def send_to_reminders(text: str, dry_run: bool):
+    """Create a Reminders item from the text."""
+
+    LOG.info("Sending to Reminders: %r", text)
+    if not dry_run:
+        # This uses the command line "reminders" tool from https://github.com/keith/reminders-cli
+        subprocess.run(["/usr/local/bin/reminders", "add", "Inbox", text], check=True)
 
 
 def cleaned(text: str, prefix: str) -> str:
@@ -41,7 +80,7 @@ def cleaned(text: str, prefix: str) -> str:
     return unlinked.strip()
 
 
-def process_daily_notes(vault: Vault, dry_run: bool):
+def process_daily_notes(vault: Vault, action_map: Dict[str, ActionFunc], dry_run: bool):
     """Look for unprocessed notes, sent appropriate lines to various apps, and mark them done."""
 
     today = dt.date.today()
@@ -56,7 +95,7 @@ def process_daily_notes(vault: Vault, dry_run: bool):
             continue
 
         LOG.info("Processing %r from %s", note.name, note_date)
-        actions, journals, new_content = parse(content)
+        actions, new_content = parse(content, action_map)
 
         if new_content == "\n":
             LOG.info("Deleting newly empty file")
@@ -67,14 +106,15 @@ def process_daily_notes(vault: Vault, dry_run: bool):
             if not dry_run:
                 note.write_text(new_content)
 
-        for action in actions:
-            send_to_omnifocus(action, dry_run)
+        for func, items in actions.items():
+            if func is send_to_dayone:
+                func("\n\n".join(items), dry_run)
+            else:
+                for item in items:
+                    func(item, dry_run)
 
-        if journals:
-            send_to_dayone("\n\n".join(journals), dry_run)
 
-
-def parse(text: str) -> Tuple[List[str], List[str], str]:
+def parse(text: str, action_map: Dict[str, ActionFunc]) -> Tuple[Dict[ActionFunc, List[str]], str]:
     """Process the lines in the file.
 
     Return:
@@ -84,21 +124,26 @@ def parse(text: str) -> Tuple[List[str], List[str], str]:
     """
 
     lines = []
-    actions = []
-    journals = []
+
+    actions: Dict[ActionFunc, List[str]] = {}
+    prefixes = tuple(action_map.keys())
 
     for line in text.splitlines():
-        if line.startswith(TO_DO):
-            actions.append(cleaned(line, TO_DO))
-        elif line.startswith(JOURNAL):
-            journals.append(cleaned(line, JOURNAL))
-        else:
+        if not line.startswith(prefixes):
             lines.append(line.replace(UNPROCESSED, "").rstrip())
+            continue
+
+        for prefix, func in action_map.items():
+            if line.startswith(prefix):
+                actions.setdefault(func, []).append(cleaned(line, prefix))
+                break
+        else:
+            raise ValueError(f"{text} didn't match any of {prefixes}.")
 
     output_lines = remove_empty_sections(lines)
     out = "\n".join(output_lines).strip() + "\n"
 
-    return actions, journals, out
+    return actions, out
 
 
 def remove_empty_sections(lines: List[str]) -> List[str]:
@@ -133,20 +178,14 @@ def remove_empty_lines(lines: List[str]) -> List[str]:
     return new_lines
 
 
-def send_to_dayone(text: str, dry_run: bool):
-    """Create a Day One journal entry from the text."""
+def make_action_map(process_notes: ProcessNotes) -> Dict[str, ActionFunc]:
+    """Make a mapping of daily note line prefixes to the functions they should be sent to."""
 
-    LOG.info("Sending to Day One: %r", text)
-    if not dry_run:
-        webbrowser.open(f"dayone2://post?entry={quote(text)}")
+    action_map: Dict[str, ActionFunc] = {
+        prefix: ACTIONS[action_name] for prefix, action_name in process_notes.actions.items()
+    }
 
-
-def send_to_omnifocus(text: str, dry_run: bool):
-    """Create an OmniFocus action from the text."""
-
-    LOG.info("Sending to OmniFocus: %r", text)
-    if not dry_run:
-        webbrowser.open(f"omnifocus://x-callback-url/add?name={quote(text)}&autosave=true")
+    return action_map
 
 
 def handle_command_line():
@@ -163,7 +202,8 @@ def handle_command_line():
     logging_verbosity(args.verbose)
 
     config = load_config()
-    process_daily_notes(config.vaults[args.vault], args.dry_run)
+    action_map = make_action_map(config.process_notes)
+    process_daily_notes(config.vaults[args.vault], action_map, args.dry_run)
 
 
 if __name__ == "__main__":

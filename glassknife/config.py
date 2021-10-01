@@ -32,9 +32,16 @@ class Vault(BaseModel):
         return self.path / self.templates_subdir
 
 
+class ProcessNotes(BaseModel):
+    """Configuration for process-notes."""
+
+    actions: Dict[str, str]
+
+
 class Config(BaseModel):
     """glassknife configuration class."""
 
+    process_notes: ProcessNotes
     vaults: Dict[str, Vault]
 
 

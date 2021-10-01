@@ -18,7 +18,7 @@ I wrote these tools for my own personal use. They might be useful for other peop
 * All of a vault's daily notes live in the same directory.
 * All of a vault's templates live in the same directory.
 * Daily notes use the default naming convention of ``YYYY-MM-DD.md``.
-* You're using OmniFocus_ to record your action items.
+* You're using Reminders or OmniFocus_ to record your action items.
 * You're using `Day One`_ as your journal.
 
 It should be very easy to edit the code if your setup doesn't exactly match mine. While I intend to make this more configurable later, I haven't gotten around to that yet.
@@ -31,7 +31,7 @@ Installation
 Configuration
 =============
 
-Make a file in your home directory called ``~/.config/glassknife/config.yaml``::
+Make a file in your home directory called ``~/.config/glassknife/config.yaml`` (but using your own information)::
 
     vaults:
       Everything:
@@ -39,6 +39,12 @@ Make a file in your home directory called ``~/.config/glassknife/config.yaml``::
         notes_subdir: "Daily notes go here"
         templates_subdir: "Templates are here"
         daily_template_name: "My daily note template.md"
+
+    process_notes:
+        actions:
+            "- ": Reminders
+            "* ": "Day One"
+            "- [ ] ": OmniFocus
 
 The tools
 =========
@@ -127,13 +133,15 @@ After adding things to a note all day, the note might end up looking like::
     Watching [[Ted Lasso]]
     * Took the car for an oil change.
     - [ ] Buy coffee filters
+    - Water the plant
 
     # unprocessed
 
-Running ``process-notes Everything`` will do a few things:
+Running ``process-notes Everything`` with the sample configuration given above will do a few things:
 
-* Lines starting with ``- [ ]`` will turn into OmniFocus actions and be removed from the daily note.
-* Lines starting with ``*`` will be collected together and turned into a Day One journal entry, and removed from the daily note.
+* Lines starting with ":literal:`- [ ] \ `" will turn into OmniFocus actions and be removed from the daily note.
+* Lines starting with ":literal:`- \ `" will become actions in the Reminders.app Inbox.
+* Lines starting with ":literal:`* \ `" will be collected together and turned into a Day One journal entry, and removed from the daily note.
 * Since the ``# Work`` section is now empty, it will be removed from the daily note.
 * The ``#unprocessed`` tag will be removed from the daily note.
 
@@ -149,6 +157,27 @@ If the resulting note is completely empty because all lines have been processed 
 I run this nightly with a cron job::
 
     50 23 * * * /path/to/obsidian/.venv/bin/process-notes Stuff
+
+Configuration
+^^^^^^^^^^^^^
+
+The example configuration file above had this block::
+
+    process_notes:
+        actions:
+            "- ": Reminders
+            "* ": "Day One"
+            "- [ ] ": OmniFocus
+
+That means that a line beginning with one those prefixes will be sent to the corresponding program. Feel free to alter this to your own preferences! If you don't use Day One, remove the ``"* ": "Day One"`` item. If you want lines starting with ```&&&`` to be sent to Reminders, add ``"&&&": Reminders`` to it.
+
+As of this writing,
+
+* Day One
+* OmniFocus
+* Reminders
+
+are supported.
 
 Contributing
 ============
